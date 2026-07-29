@@ -1,0 +1,9 @@
+Package: com.onewhamscale.tinderplus
+Name: OneWhamScale TinderPlus
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Ultimate dating app enhancement suite. Multi-account, location spoofing, device fingerprint spoofing, jailbreak detection bypass for Tinder, Badoo, Bumble, Hily, Fruitz, Feels
+Maintainer: OneWhamScale Agency
+Author: OneWhamScale Agency
+Section: Tweaks
+Depends: firmware (>= 14.0), mobilesubstrate (>= 0.9.5000), preferenceloader
