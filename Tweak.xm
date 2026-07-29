@@ -450,16 +450,18 @@ static void OWSInjectFakeVideo(void) {
 // ============================================================================
 
 %ctor {
-    @autoreleasepool {
-        // Initialize config
-        [OWSConfig sharedConfig];
-        
-        // Wait for app to be ready
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    // Delay everything to ensure app is fully loaded
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            // Initialize config
+            [OWSConfig sharedConfig];
+            
             // Create floating button
             OWSFloatingButton *button = [[OWSFloatingButton alloc] initWithFrame:CGRectMake(20, 100, 50, 50)];
             UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
-            [window addSubview:button];
+            if (window) {
+                [window addSubview:button];
+            }
             
             // Add observer for settings button tap
             [[NSNotificationCenter defaultCenter] addObserverForName:@"OWSSettingsButtonTapped"
@@ -468,6 +470,6 @@ static void OWSInjectFakeVideo(void) {
                                                           usingBlock:^(NSNotification *note) {
                 [[OWSSettingsPanel sharedPanel] show];
             }];
-        });
-    }
+        }
+    });
 }
