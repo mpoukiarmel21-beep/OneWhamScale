@@ -38,7 +38,11 @@ jobs:
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
       run: |
-        ipatool download --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --bundle-identifier com.cardify.tinder --output Tinder.ipa
+        ipatool --help 2>&1 || true
+        echo "---"
+        ipatool auth login --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" 2>&1 || true
+        echo "---"
+        ipatool download --bundle-identifier com.cardify.tinder --output Tinder.ipa 2>&1 || true
         
     - name: Compile tweak
       run: |
