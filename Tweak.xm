@@ -25,8 +25,6 @@
 - (void)saveConfig;
 @end
 
-@class OWSSettingsPanel;
-
 @implementation OWSConfig
 
 + (instancetype)sharedConfig {
@@ -125,7 +123,10 @@
 }
 
 - (void)buttonTapped {
-    [[OWSSettingsPanel sharedPanel] show];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"OneWhamScale" message:@"Settings panel will be available soon" preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+    UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
+    [window.rootViewController presentViewController:alert animated:YES completion:nil];
 }
 
 @end
