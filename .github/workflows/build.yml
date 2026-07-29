@@ -1,11 +1,16 @@
 name: Build OneWhamScale
 
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      twofa_code:
+        description: '2FA Code (6 digits, optional - only if ipatool asks)'
+        required: false
+        default: ''
   schedule:
     - cron: '0 0 * * *'  # Daily at midnight
-  workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
   build:
@@ -37,9 +42,35 @@ jobs:
       env:
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+        TWOFA_CODE: ${{ github.event.inputs.twofa_code }}
       run: |
-        ipatool auth login --email "$APPLE_ID" --password "$APPLE_PASSWORD" 2>&1
-        ipatool download --bundle-id com.cardify.tinder --output Tinder.ipa 2>&1
+        echo "Attempting to download Tinder IPA..."
+        
+        # Login with app-specific password
+        if [ -n "$TWOFA_CODE" ]; then
+          echo "2FA code provided, using interactive mode"
+          expect -c "
+            spawn ipatool auth login --email \"$APPLE_ID\" --password \"$APPLE_PASSWORD\"
+            expect \"enter 2FA code:\"
+            send \"$TWOFA_CODE\r\"
+            expect eof
+          " 2>&1 || echo "Login failed, trying download anyway"
+        else
+          echo "No 2FA code provided, attempting direct login"
+          ipatool auth login --email "$APPLE_ID" --password "$APPLE_PASSWORD" 2>&1 || echo "Login failed"
+        fi
+        
+        # Try to download
+        ipatool download --bundle-id com.cardify.tinder --output Tinder.ipa 2>&1 || \
+        ipatool download --bundle-id com.tinder.tinder --output Tinder.ipa 2>&1
+        
+        if [ ! -f Tinder.ipa ]; then
+          echo "ERROR: Tinder.ipa not downloaded"
+          exit 1
+        fi
+        
+        echo "✓ Tinder.ipa downloaded successfully"
+        ls -la Tinder.ipa
         
     - name: Compile tweak
       run: |
@@ -48,11 +79,16 @@ jobs:
         
     - name: Extract IPA
       run: |
+        mkdir -p extracted
         unzip -q Tinder.ipa -d extracted
         
     - name: Inject dylib
       run: |
         DYLIB_PATH=$(find .theos/obj -name "*.dylib" | head -1)
+        if [ -z "$DYLIB_PATH" ]; then
+          echo "ERROR: dylib not found"
+          exit 1
+        fi
         cp "$DYLIB_PATH" extracted/Payload/Tinder.app/Frameworks/
         insert_dylib --inplace --all-yes "@executable_path/Frameworks/$(basename $DYLIB_PATH)" extracted/Payload/Tinder.app/Tinder
         
@@ -69,6 +105,7 @@ jobs:
         cd extracted
         zip -qr ../OneWhamScale_TinderPlus_v1.1.0.ipa Payload
         cd ..
+        ls -la OneWhamScale_TinderPlus_v1.1.0.ipa
         
     - name: Create Release
       uses: softprops/action-gh-release@v1

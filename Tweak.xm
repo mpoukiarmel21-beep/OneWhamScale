@@ -20,6 +20,9 @@
 @property (nonatomic, assign) double spoofedLongitude;
 @property (nonatomic, strong) NSString *currentContainer;
 @property (nonatomic, strong) NSMutableDictionary *containers;
+@property (nonatomic, strong) NSString *fakeCameraMediaPath;
+@property (nonatomic, strong) AVPlayer *fakeCameraPlayer;
+@property (nonatomic, strong) NSArray *availableCities;
 + (instancetype)sharedConfig;
 - (void)loadConfig;
 - (void)saveConfig;
@@ -46,6 +49,20 @@
         _spoofedLongitude = 2.3522;
         _currentContainer = @"default";
         _containers = [NSMutableDictionary dictionary];
+        _availableCities = @[
+            @{@"name": @"Paris", @"lat": @48.8566, @"lon": @2.3522},
+            @{@"name": @"Lyon", @"lat": @45.7640, @"lon": @4.8357},
+            @{@"name": @"Marseille", @"lat": @43.2965, @"lon": @5.3698},
+            @{@"name": @"Bordeaux", @"lat": @44.8378, @"lon": @-0.5792},
+            @{@"name": @"Toulouse", @"lat": @43.6047, @"lon": @1.4442},
+            @{@"name": @"Nice", @"lat": @43.7102, @"lon": @7.2620},
+            @{@"name": @"Nantes", @"lat": @47.2184, @"lon": @-1.5536},
+            @{@"name": @"Strasbourg", @"lat": @48.5734, @"lon": @7.7521},
+            @{@"name": @"Lille", @"lat": @50.6292, @"lon": @3.0573},
+            @{@"name": @"New York", @"lat": @40.7128, @"lon": @-74.0060},
+            @{@"name": @"London", @"lat": @51.5074, @"lon": @-0.1278},
+            @{@"name": @"Tokyo", @"lat": @35.6762, @"lon": @139.6503}
+        ];
         [self loadConfig];
     }
     return self;
@@ -123,10 +140,7 @@
 }
 
 - (void)buttonTapped {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"OneWhamScale" message:@"Settings panel will be available soon" preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-    UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
-    [window.rootViewController presentViewController:alert animated:YES completion:nil];
+    [OWSSettingsPanel showPanel];
 }
 
 @end
@@ -151,6 +165,13 @@
         shared = [[OWSSettingsPanel alloc] init];
     });
     return shared;
+}
+
++ (void)showPanel {
+    OWSSettingsPanel *panel = [self sharedPanel];
+    UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
+    if (!window.rootViewController) return;
+    [window.rootViewController presentViewController:panel animated:YES completion:nil];
 }
 
 - (void)loadView {
@@ -316,14 +337,13 @@
 %end
 
 // ============================================================================
-// FAKE CAMERA HOOKS
+// FAKE CAMERA HOOKS (Photo + Video)
 // ============================================================================
 
 %hook AVCaptureDevice
 
 + (AVCaptureDevice *)defaultDeviceWithMediaType:(AVMediaType)mediaType {
     if ([OWSConfig sharedConfig].fakeCameraEnabled && [mediaType isEqualToString:AVMediaTypeVideo]) {
-        // Return nil to force app to use alternative input
         return nil;
     }
     return %orig;
@@ -337,12 +357,56 @@
     if ([OWSConfig sharedConfig].fakeCameraEnabled && [input isKindOfClass:[AVCaptureDeviceInput class]]) {
         AVCaptureDeviceInput *deviceInput = (AVCaptureDeviceInput *)input;
         if ([deviceInput.device hasMediaType:AVMediaTypeVideo]) {
-            // Inject fake video input here
-            // TODO: Implement video file injection
             return NO;
         }
     }
     return %orig;
+}
+
+- (void)startRunning {
+    if ([OWSConfig sharedConfig].fakeCameraEnabled) {
+        // Inject fake video frames
+        [self injectFakeVideoFrames];
+        return;
+    }
+    %orig;
+}
+
+- (void)injectFakeVideoFrames {
+    OWSConfig *config = [OWSConfig sharedConfig];
+    NSString *mediaPath = config.fakeCameraMediaPath;
+    
+    if (!mediaPath) return;
+    
+    // Get media type (photo or video)
+    BOOL isVideo = [mediaPath.pathExtension.lowercaseString isEqualToString:@"mp4"] || 
+                   [mediaPath.pathExtension.lowercaseString isEqualToString:@"mov"];
+    
+    if (isVideo) {
+        // Loop video file
+        NSURL *videoURL = [NSURL fileURLWithPath:mediaPath];
+        AVAsset *asset = [AVAsset assetWithURL:videoURL];
+        AVAssetTrack *track = [asset.tracks firstObject];
+        
+        if (track) {
+            AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
+            AVPlayer *player = [AVPlayer playerWithPlayerItem:item];
+            player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
+            
+            // Loop video
+            [[NSNotificationCenter defaultCenter] addObserverForName:AVPlayerItemDidPlayToEndTimeNotification
+                                                              object:item
+                                                               queue:[NSOperationQueue mainQueue]
+                                                          usingBlock:^(NSNotification *note) {
+                [item seekToTime:kCMTimeZero];
+                [player play];
+            }];
+            
+            [player play];
+            config.fakeCameraPlayer = player;
+        }
+    }
+    // Photo mode: handled by OWSCameraPreview overlay
 }
 
 %end
