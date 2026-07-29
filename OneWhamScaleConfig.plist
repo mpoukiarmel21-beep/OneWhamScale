@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Accounts</key>
+	<dict>
+		<key>MaxAccounts</key>
+		<integer>10</integer>
+		<key>IsolationLevel</key>
+		<string>full</string>
+		<key>KeychainIsolation</key>
+		<true/>
+		<key>UserDefaultsIsolation</key>
+		<true/>
+		<key>FilesystemIsolation</key>
+		<true/>
+		<key>CacheIsolation</key>
+		<true/>
+	</dict>
+	<key>Apps</key>
+	<array>
+		<string>com.cardify.tinder</string>
+	</array>
+	<key>Version</key>
+	<string>1.0.0</string>
+</dict>
+</plist>
