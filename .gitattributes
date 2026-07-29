@@ -1,0 +1,2 @@
+input/Tinder.ipa filter=lfs diff=lfs merge=lfs -text
+input/*.ipa filter=lfs diff=lfs merge=lfs -text
