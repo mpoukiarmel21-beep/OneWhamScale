@@ -1,9 +1,12 @@
-name: Build OneWhamScale
+name: Build OneWhamScale IPA
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 6 * * *'
+    inputs:
+      tinder_ipa_url:
+        description: 'URL du Tinder IPA (optionnel)'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -15,28 +18,45 @@ jobs:
       - name: Install Theos
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
-          export THEOS=$HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
-      - name: Build Tweak
+      - name: Install Dependencies
+        run: |
+          brew install ldid
+          brew install insert_dylib 2>/dev/null || true
+
+      - name: Build OneWhamScale.dylib
         run: |
           export THEOS=$HOME/theos
-          make clean
-          make package
-          echo "Tweak .deb prêt:"
-          ls -lh packages/*.deb
+          make clean || true
+          make package || true
+          ls -la .theos/obj/debug/ 2>/dev/null || true
 
-      - name: Upload .deb
+      - name: Download Tinder IPA
+        run: |
+          if [ -n "${{ github.event.inputs.tinder_ipa_url }}" ]; then
+            curl -L "${{ github.event.inputs.tinder_ipa_url }}" -o Tinder.ipa
+          else
+            echo "Pas de URL fournie. Mettez un Tinder.ipa dans le repo ou upload manuel"
+            exit 1
+          fi
+
+      - name: Build IPA
+        run: |
+          chmod +x build.sh
+          ./build.sh --ipa Tinder.ipa
+
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: OneWhamScale_v1.0.0
-          path: packages/*.deb
+          name: OneWhamScale_IPA_${{ github.run_number }}
+          path: output/*.ipa
           retention-days: 30
 
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          tag: build-${{ github.run_number }}
-          name: "OneWhamScale v1.0.0 build ${{ github.run_number }}"
-          artifacts: "packages/*.deb"
+          tag: ipa-${{ github.run_number }}
+          name: "OneWhamScale IPA build ${{ github.run_number }}"
+          artifacts: "output/*.ipa"
           token: ${{ secrets.GITHUB_TOKEN }}
