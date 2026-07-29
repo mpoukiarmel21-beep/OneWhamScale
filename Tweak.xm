@@ -25,6 +25,8 @@
 - (void)saveConfig;
 @end
 
+@class OWSSettingsPanel;
+
 @implementation OWSConfig
 
 + (instancetype)sharedConfig {
