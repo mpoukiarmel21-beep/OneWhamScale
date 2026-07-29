@@ -140,7 +140,7 @@
 }
 
 - (void)buttonTapped {
-    [OWSSettingsPanel showPanel];
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"OWSSettingsButtonTapped" object:nil];
 }
 
 @end
@@ -153,7 +153,9 @@
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) NSArray *sections;
 + (instancetype)sharedPanel;
++ (void)showPanel;
 - (void)show;
+- (void)dismiss;
 @end
 
 @implementation OWSSettingsPanel
@@ -340,6 +342,33 @@
 // FAKE CAMERA HOOKS (Photo + Video)
 // ============================================================================
 
+static void OWSInjectFakeVideo(void) {
+    OWSConfig *config = [OWSConfig sharedConfig];
+    NSString *mediaPath = config.fakeCameraMediaPath;
+    if (!mediaPath) return;
+    BOOL isVideo = [mediaPath.pathExtension.lowercaseString isEqualToString:@"mp4"] ||
+                   [mediaPath.pathExtension.lowercaseString isEqualToString:@"mov"];
+    if (isVideo) {
+        NSURL *videoURL = [NSURL fileURLWithPath:mediaPath];
+        AVAsset *asset = [AVAsset assetWithURL:videoURL];
+        AVAssetTrack *track = [asset.tracks firstObject];
+        if (track) {
+            AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
+            AVPlayer *player = [AVPlayer playerWithPlayerItem:item];
+            player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
+            [[NSNotificationCenter defaultCenter] addObserverForName:AVPlayerItemDidPlayToEndTimeNotification
+                                                              object:item
+                                                               queue:[NSOperationQueue mainQueue]
+                                                          usingBlock:^(NSNotification *note) {
+                [item seekToTime:kCMTimeZero completionHandler:nil];
+                [player play];
+            }];
+            [player play];
+            config.fakeCameraPlayer = player;
+        }
+    }
+}
+
 %hook AVCaptureDevice
 
 + (AVCaptureDevice *)defaultDeviceWithMediaType:(AVMediaType)mediaType {
@@ -365,48 +394,10 @@
 
 - (void)startRunning {
     if ([OWSConfig sharedConfig].fakeCameraEnabled) {
-        // Inject fake video frames
-        [self injectFakeVideoFrames];
+        OWSInjectFakeVideo();
         return;
     }
     %orig;
-}
-
-- (void)injectFakeVideoFrames {
-    OWSConfig *config = [OWSConfig sharedConfig];
-    NSString *mediaPath = config.fakeCameraMediaPath;
-    
-    if (!mediaPath) return;
-    
-    // Get media type (photo or video)
-    BOOL isVideo = [mediaPath.pathExtension.lowercaseString isEqualToString:@"mp4"] || 
-                   [mediaPath.pathExtension.lowercaseString isEqualToString:@"mov"];
-    
-    if (isVideo) {
-        // Loop video file
-        NSURL *videoURL = [NSURL fileURLWithPath:mediaPath];
-        AVAsset *asset = [AVAsset assetWithURL:videoURL];
-        AVAssetTrack *track = [asset.tracks firstObject];
-        
-        if (track) {
-            AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
-            AVPlayer *player = [AVPlayer playerWithPlayerItem:item];
-            player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
-            
-            // Loop video
-            [[NSNotificationCenter defaultCenter] addObserverForName:AVPlayerItemDidPlayToEndTimeNotification
-                                                              object:item
-                                                               queue:[NSOperationQueue mainQueue]
-                                                          usingBlock:^(NSNotification *note) {
-                [item seekToTime:kCMTimeZero];
-                [player play];
-            }];
-            
-            [player play];
-            config.fakeCameraPlayer = player;
-        }
-    }
-    // Photo mode: handled by OWSCameraPreview overlay
 }
 
 %end
@@ -469,6 +460,14 @@
             OWSFloatingButton *button = [[OWSFloatingButton alloc] initWithFrame:CGRectMake(20, 100, 50, 50)];
             UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
             [window addSubview:button];
+            
+            // Add observer for settings button tap
+            [[NSNotificationCenter defaultCenter] addObserverForName:@"OWSSettingsButtonTapped"
+                                                              object:nil
+                                                               queue:[NSOperationQueue mainQueue]
+                                                          usingBlock:^(NSNotification *note) {
+                [[OWSSettingsPanel sharedPanel] show];
+            }];
         });
     }
 }
