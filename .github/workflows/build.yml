@@ -17,8 +17,16 @@ jobs:
       
     - name: Install dependencies
       run: |
-        brew install ldid insert-dylib
-        pip3 install ipatool
+        brew install ldid
+        brew install ipatool
+        
+    - name: Build insert_dylib
+      run: |
+        git clone https://github.com/tyilo/insert_dylib.git
+        cd insert_dylib
+        xcodebuild -project insert_dylib.xcodeproj -configuration Release
+        sudo cp build/Release/insert_dylib /usr/local/bin/
+        cd ..
         
     - name: Setup Theos
       run: |
@@ -30,7 +38,7 @@ jobs:
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
       run: |
-        ipatool download -e $APPLE_ID -p $APPLE_PASSWORD -b com.tinder.tinder -o Tinder.ipa
+        ipatool download -e "$APPLE_ID" -p "$APPLE_PASSWORD" -b com.cardify.tinder -o Tinder.ipa
         
     - name: Compile tweak
       run: |
@@ -39,22 +47,27 @@ jobs:
         
     - name: Extract IPA
       run: |
-        mkdir -p Payload
-        unzip -q Tinder.ipa -d .
+        unzip -q Tinder.ipa -d extracted
         
     - name: Inject dylib
       run: |
         DYLIB_PATH=$(find .theos/obj -name "*.dylib" | head -1)
-        insert_dylib --inplace --all-yes "@executable_path/Frameworks/$(basename $DYLIB_PATH)" Payload/Tinder.app/Tinder
-        cp $DYLIB_PATH Payload/Tinder.app/Frameworks/
+        cp "$DYLIB_PATH" extracted/Payload/Tinder.app/Frameworks/
+        insert_dylib --inplace --all-yes "@executable_path/Frameworks/$(basename $DYLIB_PATH)" extracted/Payload/Tinder.app/Tinder
         
-    - name: Re-sign application
+    - name: Remove code signature
       run: |
-        codesign -f -s - Payload/Tinder.app
+        rm -rf extracted/Payload/Tinder.app/_CodeSignature
+        
+    - name: Fake sign with ldid
+      run: |
+        ldid -S extracted/Payload/Tinder.app/Tinder
         
     - name: Repackage IPA
       run: |
-        zip -qr OneWhamScale_TinderPlus_v1.1.0.ipa Payload
+        cd extracted
+        zip -qr ../OneWhamScale_TinderPlus_v1.1.0.ipa Payload
+        cd ..
         
     - name: Create Release
       uses: softprops/action-gh-release@v1
