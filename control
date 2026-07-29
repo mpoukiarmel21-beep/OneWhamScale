@@ -1,0 +1,9 @@
+Package: com.onewhamscale.tweak
+Name: OneWhamScale
+Version: 1.1.0
+Architecture: iphoneos-arm
+Description: Complete Tinder enhancement suite with floating menu, location spoofing, ghost mode, fake camera, and container isolation
+Maintainer: OneWhamScale Team
+Author: OneWhamScale Team
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000)

@@ -1,0 +1,66 @@
+name: Build OneWhamScale
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: |
+        brew install ldid insert-dylib
+        pip3 install ipatool
+        
+    - name: Setup Theos
+      run: |
+        git clone --recursive https://github.com/theos/theos.git $HOME/theos
+        echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+        
+    - name: Download latest Tinder IPA
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      run: |
+        ipatool download -e $APPLE_ID -p $APPLE_PASSWORD -b com.tinder.tinder -o Tinder.ipa
+        
+    - name: Compile tweak
+      run: |
+        make clean
+        make package
+        
+    - name: Extract IPA
+      run: |
+        mkdir -p Payload
+        unzip -q Tinder.ipa -d .
+        
+    - name: Inject dylib
+      run: |
+        DYLIB_PATH=$(find .theos/obj -name "*.dylib" | head -1)
+        insert_dylib --inplace --all-yes "@executable_path/Frameworks/$(basename $DYLIB_PATH)" Payload/Tinder.app/Tinder
+        cp $DYLIB_PATH Payload/Tinder.app/Frameworks/
+        
+    - name: Re-sign application
+      run: |
+        codesign -f -s - Payload/Tinder.app
+        
+    - name: Repackage IPA
+      run: |
+        zip -qr OneWhamScale_TinderPlus_v1.1.0.ipa Payload
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: OneWhamScale_TinderPlus_v1.1.0.ipa
+        tag_name: v1.1.0-${{ github.run_number }}
+        name: OneWhamScale v1.1.0 Build ${{ github.run_number }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
