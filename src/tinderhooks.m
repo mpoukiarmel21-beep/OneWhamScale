@@ -409,9 +409,9 @@ static NSURL *(*orig_URLForDirectory)(id, SEL, NSSearchPathDirectory, NSSearchPa
 static NSURL *hook_URLForDirectory(id self, SEL _cmd, NSSearchPathDirectory directory, NSSearchPathDomainMask domain, NSURL *url, BOOL create, NSError **error) {
     if ([OWSConfig sharedConfig].containerIsolationEnabled) {
         NSString *container = [OWSConfig sharedConfig].currentContainer;
-        NSURL *url = orig_URLForDirectory(self, _cmd, directory, domain, url, create, error);
-        if (url) {
-            NSURL *isolatedURL = [url URLByAppendingPathComponent:container];
+        NSURL *baseURL = orig_URLForDirectory(self, _cmd, directory, domain, url, create, error);
+        if (baseURL) {
+            NSURL *isolatedURL = [baseURL URLByAppendingPathComponent:container];
             if (create) {
                 [[NSFileManager defaultManager] createDirectoryAtURL:isolatedURL
                                          withIntermediateDirectories:YES
