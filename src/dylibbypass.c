@@ -1,14 +1,12 @@
 /* ============================================================
- * dylibbypass.c - Dylib/Image loading bypass hooks (fishhook)
- * Hooks: dlopen, dlsym, _dyld_get_image_name, _dyld_image_count
- * Hides jailbreak dylibs loaded into process
+ * dylibbypass.c - Dylib/Image loading bypass hooks (Substrate)
+ * Hooks: dlopen, _dyld_get_image_name, _dyld_image_count
  * ============================================================ */
 
 #include "utility.h"
-#include "fishhook.h"
+#include <substrate.h>
 #include <dlfcn.h>
 #include <mach-o/dyld.h>
-#include <string.h>
 
 static void *(*orig_dlopen)(const char *path, int mode);
 static void *hook_dlopen(const char *path, int mode) {
@@ -31,16 +29,11 @@ static uint32_t hook__dyld_image_count(void) {
         const char *name = orig__dyld_get_image_name(i);
         if (name && isKnownDylib(name)) jbCount++;
     }
-    uint32_t result = realCount > jbCount ? realCount - jbCount : 1;
-    return result;
+    return realCount > jbCount ? realCount - jbCount : 1;
 }
 
-/* ---- INIT ---- */
 void dylibbypass_init(void) {
-    struct rebinding rebindings[] = {
-        {"dlopen", (void *)hook_dlopen, (void **)&orig_dlopen},
-        {"_dyld_get_image_name", (void *)hook__dyld_get_image_name, (void **)&orig__dyld_get_image_name},
-        {"_dyld_image_count", (void *)hook__dyld_image_count, (void **)&orig__dyld_image_count},
-    };
-    rebind_symbols(rebindings, sizeof(rebindings) / sizeof(struct rebinding));
+    MSHookFunction((void *)dlopen, (void *)hook_dlopen, (void **)&orig_dlopen);
+    MSHookFunction((void *)_dyld_get_image_name, (void *)hook__dyld_get_image_name, (void **)&orig__dyld_get_image_name);
+    MSHookFunction((void *)_dyld_image_count, (void *)hook__dyld_image_count, (void **)&orig__dyld_image_count);
 }

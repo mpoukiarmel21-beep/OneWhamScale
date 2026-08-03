@@ -1,15 +1,12 @@
 /* ============================================================
- * spawnbypass.c - Spawn/fork/process bypass hooks (fishhook)
- * Hooks: fork, vfork, posix_spawn, posix_spawnp, system
- * Blocks jailbreak tool detection via forking
+ * spawnbypass.c - Spawn/fork/process bypass hooks (Substrate)
+ * Hooks: fork, vfork, posix_spawn, posix_spawnp
  * ============================================================ */
 
 #include "utility.h"
-#include "fishhook.h"
+#include <substrate.h>
 #include <spawn.h>
 #include <errno.h>
-#include <stdarg.h>
-#include <unistd.h>
 
 static pid_t (*orig_fork)(void);
 static pid_t hook_fork(void) { return -1; }
@@ -46,13 +43,9 @@ static int hook_posix_spawnp(pid_t *pid, const char *file,
     return orig_posix_spawnp(pid, file, file_actions, attrp, argv, envp);
 }
 
-/* ---- INIT ---- */
 void spawnbypass_init(void) {
-    struct rebinding rebindings[] = {
-        {"fork", (void *)hook_fork, (void **)&orig_fork},
-        {"vfork", (void *)hook_vfork, (void **)&orig_vfork},
-        {"posix_spawn", (void *)hook_posix_spawn, (void **)&orig_posix_spawn},
-        {"posix_spawnp", (void *)hook_posix_spawnp, (void **)&orig_posix_spawnp},
-    };
-    rebind_symbols(rebindings, sizeof(rebindings) / sizeof(struct rebinding));
+    MSHookFunction((void *)fork, (void *)hook_fork, (void **)&orig_fork);
+    MSHookFunction((void *)vfork, (void *)hook_vfork, (void **)&orig_vfork);
+    MSHookFunction((void *)posix_spawn, (void *)hook_posix_spawn, (void **)&orig_posix_spawn);
+    MSHookFunction((void *)posix_spawnp, (void *)hook_posix_spawnp, (void **)&orig_posix_spawnp);
 }

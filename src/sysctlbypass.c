@@ -1,9 +1,8 @@
 /* ============================================================
- * sysctlbypass.c - sysctl hook for process inspection (fishhook)
- * Blocks: CTL_KERN + KERN_PROC, KERN_PROCARGS, KERN_PROC_ALL
+ * sysctlbypass.c - sysctl hook for process inspection (Substrate)
  * ============================================================ */
 
-#include "fishhook.h"
+#include <substrate.h>
 #include <sys/sysctl.h>
 #include <string.h>
 
@@ -22,10 +21,6 @@ static int hook_sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, vo
     return orig_sysctl(name, namelen, oldp, oldlenp, newp, newlen);
 }
 
-/* ---- INIT ---- */
 void sysctlbypass_init(void) {
-    struct rebinding rebindings[] = {
-        {"sysctl", (void *)hook_sysctl, (void **)&orig_sysctl},
-    };
-    rebind_symbols(rebindings, sizeof(rebindings) / sizeof(struct rebinding));
+    MSHookFunction((void *)sysctl, (void *)hook_sysctl, (void **)&orig_sysctl);
 }

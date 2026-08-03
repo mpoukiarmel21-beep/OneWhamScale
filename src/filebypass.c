@@ -1,20 +1,16 @@
 /* ============================================================
- * filebypass.c - File system bypass hooks (fishhook)
+ * filebypass.c - File system bypass hooks (Substrate)
  * Hooks: stat, lstat, statfs, access, fopen, opendir, open, openat
- * Hides all jailbreak-related files and directories from apps
  * ============================================================ */
 
 #include "utility.h"
-#include "fishhook.h"
+#include <substrate.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
 #include <dirent.h>
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
 static int (*orig_stat)(const char *path, struct stat *buf);
 static int hook_stat(const char *path, struct stat *buf) {
@@ -78,18 +74,17 @@ static int hook_fstatat(int fd, const char *path, struct stat *buf, int flag) {
     return orig_fstatat(fd, path, buf, flag);
 }
 
-/* ---- INIT ---- */
 void filebypass_init(void) {
-    struct rebinding rebindings[] = {
-        {"stat", (void *)hook_stat, (void **)&orig_stat},
-        {"lstat", (void *)hook_lstat, (void **)&orig_lstat},
-        {"statfs", (void *)hook_statfs, (void **)&orig_statfs},
-        {"access", (void *)hook_access, (void **)&orig_access},
-        {"fopen", (void *)hook_fopen, (void **)&orig_fopen},
-        {"opendir", (void *)hook_opendir, (void **)&orig_opendir},
-        {"open", (void *)hook_open, (void **)&orig_open},
-        {"openat", (void *)hook_openat, (void **)&orig_openat},
-        {"fstatat", (void *)hook_fstatat, (void **)&orig_fstatat},
-    };
-    rebind_symbols(rebindings, sizeof(rebindings) / sizeof(struct rebinding));
+    MSHookFunction((void *)stat, (void *)hook_stat, (void **)&orig_stat);
+    MSHookFunction((void *)lstat, (void *)hook_lstat, (void **)&orig_lstat);
+    MSHookFunction((void *)statfs, (void *)hook_statfs, (void **)&orig_statfs);
+    MSHookFunction((void *)access, (void *)hook_access, (void **)&orig_access);
+    MSHookFunction((void *)fopen, (void *)hook_fopen, (void **)&orig_fopen);
+    MSHookFunction((void *)opendir, (void *)hook_opendir, (void **)&orig_opendir);
+    MSHookFunction((void *)open, (void *)hook_open, (void **)&orig_open);
+    void *sym;
+    sym = dlsym(RTLD_DEFAULT, "openat");
+    if (sym) MSHookFunction(sym, (void *)hook_openat, (void **)&orig_openat);
+    sym = dlsym(RTLD_DEFAULT, "fstatat");
+    if (sym) MSHookFunction(sym, (void *)hook_fstatat, (void **)&orig_fstatat);
 }

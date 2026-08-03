@@ -1,9 +1,8 @@
 /* ============================================================
- * mgspoof.c - MobileGestalt hardware ID spoofing (fishhook)
- * Hooks: MGCopyAnswer via dynamic symbol resolution
+ * mgspoof.c - MobileGestalt hardware ID spoofing (Substrate)
  * ============================================================ */
 
-#include "fishhook.h"
+#include <substrate.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
 #include "hardwarespoof.h"
@@ -40,14 +39,6 @@ static CFTypeRef hook_MGCopyAnswer(CFStringRef key) {
 void mgspoof_init(void) {
     void *mg = dlsym(RTLD_DEFAULT, "MGCopyAnswer");
     if (mg) {
-        /* fishhook can only rebind symbols referenced in linked images.
-           MGCopyAnswer is resolved via dlsym, so we hook it manually by
-           function pointer swap. If rebind works, great; else fallback. */
-        struct rebinding rebindings[] = {
-            {"MGCopyAnswer", (void *)hook_MGCopyAnswer, (void **)&orig_MGCopyAnswer},
-        };
-        if (rebind_symbols(rebindings, 1) != 0) {
-            orig_MGCopyAnswer = (CFTypeRef (*)(CFStringRef))mg;
-        }
+        MSHookFunction(mg, (void *)hook_MGCopyAnswer, (void **)&orig_MGCopyAnswer);
     }
 }
