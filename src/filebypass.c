@@ -5,9 +5,11 @@
 
 #include "utility.h"
 #include <substrate.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <string.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
 #include <dirent.h>
