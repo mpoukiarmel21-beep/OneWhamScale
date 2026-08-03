@@ -6,6 +6,7 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <CoreMotion/CoreMotion.h>
 #import <objc/runtime.h>
 
 /* Add jitter to touch location to avoid linear/perfect patterns */
@@ -28,9 +29,6 @@ static void swizzleTouch(void) {
 /* Spoof CoreMotion sensors (CMMotionManager) */
 
 static NSOperationQueue *motionQueue;
-
-@interface CMMotionManager (OWS)
-@end
 
 static BOOL (*orig_isAccelerometerActive)(id, SEL);
 static BOOL hook_isAccelerometerActive(id self, SEL _cmd) { return NO; }
