@@ -80,6 +80,7 @@ jobs:
         mkdir -p extracted/Payload/Tinder.app/Frameworks
         cp "$DYLIB_PATH" extracted/Payload/Tinder.app/Frameworks/
         chmod +x extracted/Payload/Tinder.app/Frameworks/OneWhamScale.dylib
+        install_name_tool -id "@executable_path/Frameworks/OneWhamScale.dylib" extracted/Payload/Tinder.app/Frameworks/OneWhamScale.dylib
         insert_dylib --inplace --all-yes "@executable_path/Frameworks/OneWhamScale.dylib" extracted/Payload/Tinder.app/Tinder
     
     - name: Remove old code signature
