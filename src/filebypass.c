@@ -57,7 +57,7 @@ static int hook_open(const char *path, int flags, ...) {
     if (path && isKnownBadPath(path)) { errno = ENOENT; return -1; }
     va_list args;
     va_start(args, flags);
-    mode_t mode = va_arg(args, mode_t);
+    mode_t mode = (mode_t)va_arg(args, int);
     va_end(args);
     return orig_open(path, flags, mode);
 }
@@ -67,7 +67,7 @@ static int hook_openat(int fd, const char *path, int flags, ...) {
     if (path && isKnownBadPath(path)) { errno = ENOENT; return -1; }
     va_list args;
     va_start(args, flags);
-    mode_t mode = va_arg(args, mode_t);
+    mode_t mode = (mode_t)va_arg(args, int);
     va_end(args);
     return orig_openat(fd, path, flags, mode);
 }
