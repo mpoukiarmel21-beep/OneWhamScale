@@ -17,6 +17,10 @@ jobs:
       with:
         lfs: true
     
+    - name: Install dependencies
+      run: |
+        brew install ldid
+
     - name: Setup Theos
       run: |
         git clone --recursive https://github.com/theos/theos.git $HOME/theos
