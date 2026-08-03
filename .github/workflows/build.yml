@@ -33,7 +33,7 @@ jobs:
     
     - name: Locate DEB package
       run: |
-        DEB_PATH=$(find .theos -name "*.deb" | head -1)
+        DEB_PATH=$(find packages -name "*.deb" | head -1)
         if [ -z "$DEB_PATH" ]; then
           echo "ERROR: .deb package not found"
           exit 1
