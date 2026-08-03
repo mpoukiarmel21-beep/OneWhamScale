@@ -10,7 +10,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/statfs.h>
 #include <sys/mount.h>
 #include <dirent.h>
 
