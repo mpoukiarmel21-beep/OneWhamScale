@@ -1,1 +1,17 @@
-{ Filter = { Bundles = ( "com.cardify.tinder" ); }; }
+{
+  Filter = {
+    Bundles = (
+      "com.cardify.tinder",
+      "com.tinder.Tinder",
+      "com.bumble.Bumble",
+      "com.badoo.Badoo",
+      "com.hily.Hily",
+      "com.feels.Feels",
+      "com.fruitz.Fruitz",
+      "com.burbn.instagram",
+      "com.burbn.barcelona",
+      "com.atebits.Tweetie2",
+      "com.google.Twitter"
+    );
+  };
+}

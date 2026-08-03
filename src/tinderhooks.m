@@ -1,15 +1,19 @@
-// OneWhamScale - Complete Tinder Enhancement Suite
-// Version 1.1.0
-// Features: Floating Menu, Containers, Location Spoof, Ghost Mode, Fake Camera
+/* ============================================================
+ * tinderhooks.m - Tinder-specific feature hooks via swizzling
+ * No CydiaSubstrate dependency - uses ObjC runtime method swizzling
+ * Features: Location spoof, Ghost mode, Fake camera, Containers,
+ * Floating button + settings panel
+ * ============================================================ */
 
+#import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <CoreLocation/CoreLocation.h>
 #import <AVFoundation/AVFoundation.h>
-#import <objc/runtime.h>
+#import "swizzle.h"
 
-// ============================================================================
-// CONFIGURATION & STATE
-// ============================================================================
+/* ============================================================
+   CONFIGURATION & STATE
+   ============================================================ */
 
 @interface OWSConfig : NSObject
 @property (nonatomic, assign) BOOL locationSpoofEnabled;
@@ -45,7 +49,7 @@
         _ghostModeEnabled = NO;
         _fakeCameraEnabled = NO;
         _containerIsolationEnabled = NO;
-        _spoofedLatitude = 48.8566; // Paris default
+        _spoofedLatitude = 48.8566;
         _spoofedLongitude = 2.3522;
         _currentContainer = @"default";
         _containers = [NSMutableDictionary dictionary];
@@ -100,12 +104,11 @@
 
 @end
 
-// ============================================================================
-// FLOATING MENU BUTTON
-// ============================================================================
+/* ============================================================
+   FLOATING BUTTON + SETTINGS PANEL
+   ============================================================ */
 
 @interface OWSFloatingButton : UIButton
-@property (nonatomic, assign) CGPoint initialCenter;
 @end
 
 @implementation OWSFloatingButton
@@ -118,15 +121,15 @@
         self.layer.shadowOffset = CGSizeMake(0, 2);
         self.layer.shadowOpacity = 0.3;
         self.layer.shadowRadius = 4;
-        
+
         UIImage *gearImage = [UIImage systemImageNamed:@"gearshape.fill"];
         [self setImage:gearImage forState:UIControlStateNormal];
         self.tintColor = [UIColor whiteColor];
         self.imageView.contentMode = UIViewContentModeScaleAspectFit;
         self.imageEdgeInsets = UIEdgeInsetsMake(8, 8, 8, 8);
-        
+
         [self addTarget:self action:@selector(buttonTapped) forControlEvents:UIControlEventTouchUpInside];
-        
+
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
         [self addGestureRecognizer:pan];
     }
@@ -145,16 +148,11 @@
 
 @end
 
-// ============================================================================
-// SETTINGS PANEL
-// ============================================================================
-
 @interface OWSSettingsPanel : UIViewController <UITableViewDelegate, UITableViewDataSource>
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) NSArray *sections;
 + (instancetype)sharedPanel;
 + (void)showPanel;
-- (void)show;
 - (void)dismiss;
 @end
 
@@ -169,6 +167,42 @@
     return shared;
 }
 
+- (void)loadView {
+    self.view = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    self.view.backgroundColor = [UIColor colorWithRed:0.1 green:0.1 blue:0.1 alpha:0.95];
+
+    self.tableView = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleInsetGrouped];
+    self.tableView.delegate = self;
+    self.tableView.dataSource = self;
+    self.tableView.backgroundColor = [UIColor clearColor];
+    [self.view addSubview:self.tableView];
+
+    UIButton *closeButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [closeButton setTitle:@"Fermer" forState:UIControlStateNormal];
+    [closeButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    closeButton.frame = CGRectMake(self.view.bounds.size.width - 80, 50, 70, 30);
+    [closeButton addTarget:self action:@selector(dismiss) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:closeButton];
+
+    self.sections = @[
+        @{@"title": @"Localisation", @"rows": @[
+            @{@"title": @"Spoof GPS", @"type": @"switch", @"key": @"locationSpoofEnabled"},
+            @{@"title": @"Choisir ville", @"type": @"action", @"key": @"selectCity"}
+        ]},
+        @{@"title": @"Mode Ghost", @"rows": @[
+            @{@"title": @"Activer Ghost Mode", @"type": @"switch", @"key": @"ghostModeEnabled"}
+        ]},
+        @{@"title": @"Caméra", @"rows": @[
+            @{@"title": @"Fake Camera", @"type": @"switch", @"key": @"fakeCameraEnabled"},
+            @{@"title": @"Sélectionner vidéo", @"type": @"action", @"key": @"selectVideo"}
+        ]},
+        @{@"title": @"Conteneurs", @"rows": @[
+            @{@"title": @"Isolation comptes", @"type": @"switch", @"key": @"containerIsolationEnabled"},
+            @{@"title": @"Gérer conteneurs", @"type": @"action", @"key": @"manageContainers"}
+        ]}
+    ];
+}
+
 + (void)showPanel {
     OWSSettingsPanel *panel = [self sharedPanel];
     UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
@@ -176,66 +210,11 @@
     [window.rootViewController presentViewController:panel animated:YES completion:nil];
 }
 
-- (void)loadView {
-    self.view = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
-    self.view.backgroundColor = [UIColor colorWithRed:0.1 green:0.1 blue:0.1 alpha:0.95];
-    
-    self.tableView = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleInsetGrouped];
-    self.tableView.delegate = self;
-    self.tableView.dataSource = self;
-    self.tableView.backgroundColor = [UIColor clearColor];
-    [self.view addSubview:self.tableView];
-    
-    UIButton *closeButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [closeButton setTitle:@"Fermer" forState:UIControlStateNormal];
-    [closeButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    closeButton.frame = CGRectMake(self.view.bounds.size.width - 80, 50, 70, 30);
-    [closeButton addTarget:self action:@selector(dismiss) forControlEvents:UIControlEventTouchUpInside];
-    [self.view addSubview:closeButton];
-    
-    self.sections = @[
-        @{
-            @"title": @"Localisation",
-            @"rows": @[
-                @{@"title": @"Spoof GPS", @"type": @"switch", @"key": @"locationSpoofEnabled"},
-                @{@"title": @"Choisir ville", @"type": @"action", @"key": @"selectCity"}
-            ]
-        },
-        @{
-            @"title": @"Mode Ghost",
-            @"rows": @[
-                @{@"title": @"Activer Ghost Mode", @"type": @"switch", @"key": @"ghostModeEnabled"}
-            ]
-        },
-        @{
-            @"title": @"Caméra",
-            @"rows": @[
-                @{@"title": @"Fake Camera", @"type": @"switch", @"key": @"fakeCameraEnabled"},
-                @{@"title": @"Sélectionner vidéo", @"type": @"action", @"key": @"selectVideo"}
-            ]
-        },
-        @{
-            @"title": @"Conteneurs",
-            @"rows": @[
-                @{@"title": @"Isolation comptes", @"type": @"switch", @"key": @"containerIsolationEnabled"},
-                @{@"title": @"Gérer conteneurs", @"type": @"action", @"key": @"manageContainers"}
-            ]
-        }
-    ];
-}
-
-- (void)show {
-    UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
-    [window.rootViewController presentViewController:self animated:YES completion:nil];
-}
-
 - (void)dismiss {
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return self.sections.count;
-}
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return self.sections.count; }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     return [self.sections[section][@"rows"] count];
@@ -248,37 +227,30 @@
         cell.backgroundColor = [UIColor clearColor];
         cell.textLabel.textColor = [UIColor whiteColor];
     }
-    
     NSDictionary *row = self.sections[indexPath.section][@"rows"][indexPath.row];
     cell.textLabel.text = row[@"title"];
-    
     if ([row[@"type"] isEqualToString:@"switch"]) {
         UISwitch *toggle = [[UISwitch alloc] init];
         NSString *key = row[@"key"];
         OWSConfig *config = [OWSConfig sharedConfig];
-        
         if ([key isEqualToString:@"locationSpoofEnabled"]) toggle.on = config.locationSpoofEnabled;
         else if ([key isEqualToString:@"ghostModeEnabled"]) toggle.on = config.ghostModeEnabled;
         else if ([key isEqualToString:@"fakeCameraEnabled"]) toggle.on = config.fakeCameraEnabled;
         else if ([key isEqualToString:@"containerIsolationEnabled"]) toggle.on = config.containerIsolationEnabled;
-        
         [toggle addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
         toggle.accessibilityIdentifier = key;
         cell.accessoryView = toggle;
     }
-    
     return cell;
 }
 
 - (void)switchChanged:(UISwitch *)sender {
     NSString *key = sender.accessibilityIdentifier;
     OWSConfig *config = [OWSConfig sharedConfig];
-    
     if ([key isEqualToString:@"locationSpoofEnabled"]) config.locationSpoofEnabled = sender.on;
     else if ([key isEqualToString:@"ghostModeEnabled"]) config.ghostModeEnabled = sender.on;
     else if ([key isEqualToString:@"fakeCameraEnabled"]) config.fakeCameraEnabled = sender.on;
     else if ([key isEqualToString:@"containerIsolationEnabled"]) config.containerIsolationEnabled = sender.on;
-    
     [config saveConfig];
 }
 
@@ -288,59 +260,72 @@
 
 @end
 
-// ============================================================================
-// LOCATION SPOOFING HOOKS
-// ============================================================================
+/* ============================================================
+   LOCATION SPOOFING
+   ============================================================ */
 
-%hook CLLocationManager
-
-- (void)startUpdatingLocation {
+static void (*orig_startUpdatingLocation)(id, SEL);
+static void hook_startUpdatingLocation(id self, SEL _cmd) {
     if ([OWSConfig sharedConfig].locationSpoofEnabled) {
         CLLocation *fakeLocation = [[CLLocation alloc] initWithLatitude:[OWSConfig sharedConfig].spoofedLatitude
-                                                             longitude:[OWSConfig sharedConfig].spoofedLongitude];
-        if ([self.delegate respondsToSelector:@selector(locationManager:didUpdateLocations:)]) {
-            [self.delegate locationManager:self didUpdateLocations:@[fakeLocation]];
+                                                              longitude:[OWSConfig sharedConfig].spoofedLongitude];
+        id<CLLocationManagerDelegate> delegate = [self delegate];
+        if ([delegate respondsToSelector:@selector(locationManager:didUpdateLocations:)]) {
+            [delegate locationManager:self didUpdateLocations:@[fakeLocation]];
         }
         return;
     }
-    %orig;
+    orig_startUpdatingLocation(self, _cmd);
 }
 
-- (CLLocation *)location {
+static CLLocation *(*orig_location_get)(id, SEL);
+static CLLocation *hook_location_get(id self, SEL _cmd) {
     if ([OWSConfig sharedConfig].locationSpoofEnabled) {
         return [[CLLocation alloc] initWithLatitude:[OWSConfig sharedConfig].spoofedLatitude
                                           longitude:[OWSConfig sharedConfig].spoofedLongitude];
     }
-    return %orig;
+    return orig_location_get(self, _cmd);
 }
 
-%end
+static void swizzleLocationManager(void) {
+    Class cls = [CLLocationManager class];
+    Method m = class_getInstanceMethod(cls, @selector(startUpdatingLocation));
+    orig_startUpdatingLocation = (void *)method_getImplementation(m);
+    method_setImplementation(m, (IMP)hook_startUpdatingLocation);
 
-// ============================================================================
-// GHOST MODE HOOKS
-// ============================================================================
-
-%hook TinderAPI
-
-- (void)updateUserPresence:(BOOL)online {
-    if ([OWSConfig sharedConfig].ghostModeEnabled) {
-        %orig(NO);
-    } else {
-        %orig;
-    }
+    m = class_getInstanceMethod(cls, @selector(location));
+    orig_location_get = (void *)method_getImplementation(m);
+    method_setImplementation(m, (IMP)hook_location_get);
 }
 
-- (void)sendTypingIndicator {
-    if (![OWSConfig sharedConfig].ghostModeEnabled) {
-        %orig;
-    }
+/* ============================================================
+   TINDER API - GHOST MODE
+   ============================================================ */
+
+static void (*orig_updateUserPresence)(id, SEL, BOOL);
+static void hook_updateUserPresence(id self, SEL _cmd, BOOL online) {
+    if ([OWSConfig sharedConfig].ghostModeEnabled) orig_updateUserPresence(self, _cmd, NO);
+    else orig_updateUserPresence(self, _cmd, online);
 }
 
-%end
+static void (*orig_sendTypingIndicator)(id, SEL);
+static void hook_sendTypingIndicator(id self, SEL _cmd) {
+    if (![OWSConfig sharedConfig].ghostModeEnabled) orig_sendTypingIndicator(self, _cmd);
+}
 
-// ============================================================================
-// FAKE CAMERA HOOKS (Photo + Video)
-// ============================================================================
+static void swizzleTinderAPI(void) {
+    Class cls = NSClassFromString(@"TinderAPI");
+    if (!cls) return;
+    Method m;
+    m = class_getInstanceMethod(cls, @selector(updateUserPresence:));
+    if (m) { orig_updateUserPresence = (void *)method_getImplementation(m); method_setImplementation(m, (IMP)hook_updateUserPresence); }
+    m = class_getInstanceMethod(cls, @selector(sendTypingIndicator));
+    if (m) { orig_sendTypingIndicator = (void *)method_getImplementation(m); method_setImplementation(m, (IMP)hook_sendTypingIndicator); }
+}
+
+/* ============================================================
+   FAKE CAMERA
+   ============================================================ */
 
 static void OWSInjectFakeVideo(void) {
     OWSConfig *config = [OWSConfig sharedConfig];
@@ -369,107 +354,112 @@ static void OWSInjectFakeVideo(void) {
     }
 }
 
-%hook AVCaptureDevice
-
-+ (AVCaptureDevice *)defaultDeviceWithMediaType:(AVMediaType)mediaType {
-    if ([OWSConfig sharedConfig].fakeCameraEnabled && [mediaType isEqualToString:AVMediaTypeVideo]) {
-        return nil;
-    }
-    return %orig;
+static id (*orig_defaultDeviceWithMediaType)(id, SEL, AVMediaType);
+static id hook_defaultDeviceWithMediaType(id self, SEL _cmd, AVMediaType mediaType) {
+    if ([OWSConfig sharedConfig].fakeCameraEnabled && [mediaType isEqualToString:AVMediaTypeVideo]) return nil;
+    return orig_defaultDeviceWithMediaType(self, _cmd, mediaType);
 }
 
-%end
-
-%hook AVCaptureSession
-
-- (BOOL)canAddInput:(AVCaptureInput *)input {
+static BOOL (*orig_canAddInput)(id, SEL, AVCaptureInput *);
+static BOOL hook_canAddInput(id self, SEL _cmd, AVCaptureInput *input) {
     if ([OWSConfig sharedConfig].fakeCameraEnabled && [input isKindOfClass:[AVCaptureDeviceInput class]]) {
         AVCaptureDeviceInput *deviceInput = (AVCaptureDeviceInput *)input;
-        if ([deviceInput.device hasMediaType:AVMediaTypeVideo]) {
-            return NO;
-        }
+        if ([deviceInput.device hasMediaType:AVMediaTypeVideo]) return NO;
     }
-    return %orig;
+    return orig_canAddInput(self, _cmd, input);
 }
 
-- (void)startRunning {
-    if ([OWSConfig sharedConfig].fakeCameraEnabled) {
-        OWSInjectFakeVideo();
-        return;
-    }
-    %orig;
+static void (*orig_startRunning)(id, SEL);
+static void hook_startRunning(id self, SEL _cmd) {
+    if ([OWSConfig sharedConfig].fakeCameraEnabled) { OWSInjectFakeVideo(); return; }
+    orig_startRunning(self, _cmd);
 }
 
-%end
+static void swizzleCamera(void) {
+    Class deviceCls = [AVCaptureDevice class];
+    Method m = class_getClassMethod(deviceCls, @selector(defaultDeviceWithMediaType:));
+    orig_defaultDeviceWithMediaType = (void *)method_getImplementation(m);
+    method_setImplementation(m, (IMP)hook_defaultDeviceWithMediaType);
 
-// ============================================================================
-// CONTAINER ISOLATION HOOKS
-// ============================================================================
+    Class sessionCls = [AVCaptureSession class];
+    m = class_getInstanceMethod(sessionCls, @selector(canAddInput:));
+    orig_canAddInput = (void *)method_getImplementation(m);
+    method_setImplementation(m, (IMP)hook_canAddInput);
 
-%hook NSUserDefaults
+    m = class_getInstanceMethod(sessionCls, @selector(startRunning));
+    orig_startRunning = (void *)method_getImplementation(m);
+    method_setImplementation(m, (IMP)hook_startRunning);
+}
 
-- (instancetype)initWithSuiteName:(NSString *)suiteName {
+/* ============================================================
+   CONTAINER ISOLATION
+   ============================================================ */
+
+static id (*orig_initWithSuiteName)(id, SEL, NSString *);
+static id hook_initWithSuiteName(id self, SEL _cmd, NSString *suiteName) {
     if ([OWSConfig sharedConfig].containerIsolationEnabled) {
         NSString *container = [OWSConfig sharedConfig].currentContainer;
         NSString *isolatedSuite = [NSString stringWithFormat:@"%@_%@", suiteName ?: @"default", container];
-        return %orig(isolatedSuite);
+        return orig_initWithSuiteName(self, _cmd, isolatedSuite);
     }
-    return %orig;
+    return orig_initWithSuiteName(self, _cmd, suiteName);
 }
 
-%end
-
-%hook NSFileManager
-
-- (NSString *)URLForDirectory:(NSSearchPathDirectory)directory 
-                     inDomain:(NSSearchPathDomainMask)domain 
-            appropriateForURL:(NSURL *)url 
-                       create:(BOOL)shouldCreate 
-                        error:(NSError **)error {
+static NSURL *(*orig_URLForDirectory)(id, SEL, NSSearchPathDirectory, NSSearchPathDomainMask, NSURL *, BOOL, NSError **);
+static NSURL *hook_URLForDirectory(id self, SEL _cmd, NSSearchPathDirectory directory, NSSearchPathDomainMask domain, NSURL *url, BOOL create, NSError **error) {
     if ([OWSConfig sharedConfig].containerIsolationEnabled) {
         NSString *container = [OWSConfig sharedConfig].currentContainer;
-        NSString *path = %orig;
-        if (path) {
-            NSString *isolatedPath = [path stringByAppendingPathComponent:container];
-            if (shouldCreate) {
-                [[NSFileManager defaultManager] createDirectoryAtPath:isolatedPath 
-                                          withIntermediateDirectories:YES 
-                                                           attributes:nil 
-                                                                error:error];
+        NSURL *url = orig_URLForDirectory(self, _cmd, directory, domain, url, create, error);
+        if (url) {
+            NSURL *isolatedURL = [url URLByAppendingPathComponent:container];
+            if (create) {
+                [[NSFileManager defaultManager] createDirectoryAtURL:isolatedURL
+                                         withIntermediateDirectories:YES
+                                                          attributes:nil
+                                                               error:error];
             }
-            return isolatedPath;
+            return isolatedURL;
         }
     }
-    return %orig;
+    return orig_URLForDirectory(self, _cmd, directory, domain, url, create, error);
 }
 
-%end
+static void swizzleContainers(void) {
+    Class cls = [NSUserDefaults class];
+    Method m = class_getInstanceMethod(cls, @selector(initWithSuiteName:));
+    orig_initWithSuiteName = (void *)method_getImplementation(m);
+    method_setImplementation(m, (IMP)hook_initWithSuiteName);
 
-// ============================================================================
-// INITIALIZATION
-// ============================================================================
+    cls = [NSFileManager class];
+    m = class_getInstanceMethod(cls, @selector(URLForDirectory:inDomain:appropriateForURL:create:error:));
+    orig_URLForDirectory = (void *)method_getImplementation(m);
+    method_setImplementation(m, (IMP)hook_URLForDirectory);
+}
 
-%ctor {
-    // Delay everything to ensure app is fully loaded
+/* ============================================================
+   INIT
+   ============================================================ */
+
+void tinderhooks_init(void) {
+    [OWSConfig sharedConfig];
+    swizzleLocationManager();
+    swizzleTinderAPI();
+    swizzleCamera();
+    swizzleContainers();
+
+    /* Floating button */
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        @autoreleasepool {
-            // Initialize config
-            [OWSConfig sharedConfig];
-            
-            // Create floating button
+        UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
+        if (window) {
             OWSFloatingButton *button = [[OWSFloatingButton alloc] initWithFrame:CGRectMake(20, 100, 50, 50)];
-            UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
-            if (window) {
-                [window addSubview:button];
-            }
-            
-            // Add observer for settings button tap
-            [[NSNotificationCenter defaultCenter] addObserverForName:@"OWSSettingsButtonTapped"
-                                                              object:nil
-                                                               queue:[NSOperationQueue mainQueue]
-                                                          usingBlock:^(NSNotification *note) {
-                [[OWSSettingsPanel sharedPanel] show];
-            }];
+            [window addSubview:button];
         }
+
+        [[NSNotificationCenter defaultCenter] addObserverForName:@"OWSSettingsButtonTapped"
+                                                          object:nil
+                                                           queue:[NSOperationQueue mainQueue]
+                                                      usingBlock:^(NSNotification *note) {
+            [OWSSettingsPanel showPanel];
+        }];
     });
 }

@@ -1,9 +1,7 @@
-name: Build OneWhamScale
+name: Build OneWhamScale Anti-Detect
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * *'
   push:
     branches: [ main ]
 
@@ -18,11 +16,11 @@ jobs:
       uses: actions/checkout@v4
       with:
         lfs: true
-      
+    
     - name: Install dependencies
       run: |
         brew install ldid
-        
+    
     - name: Build insert_dylib
       run: |
         git clone https://github.com/tyilo/insert_dylib.git
@@ -30,12 +28,12 @@ jobs:
         xcodebuild -project insert_dylib.xcodeproj -configuration Release
         sudo cp build/Release/insert_dylib /usr/local/bin/
         cd ..
-        
+    
     - name: Setup Theos
       run: |
         git clone --recursive https://github.com/theos/theos.git $HOME/theos
         echo "THEOS=$HOME/theos" >> $GITHUB_ENV
-        
+    
     - name: Setup input IPA
       run: |
         if [ -f input/Tinder.ipa ]; then
@@ -46,47 +44,65 @@ jobs:
           exit 1
         fi
         ls -la Tinder.ipa
-        
-    - name: Compile tweak
+    
+    - name: Compile OneWhamScale library
       run: |
         make clean
-        make package
-        
+        make
+        DYLIB_PATH=$(find .theos -name "OneWhamScale.dylib" | head -1)
+        if [ -z "$DYLIB_PATH" ]; then
+          echo "ERROR: OneWhamScale.dylib not found"
+          exit 1
+        fi
+        echo "DYLIB_PATH=$DYLIB_PATH"
+        ls -la "$DYLIB_PATH"
+        otool -L "$DYLIB_PATH"
+    
     - name: Extract IPA
       run: |
         mkdir -p extracted
         unzip -q Tinder.ipa -d extracted
-        
+        ls -la extracted/Payload/Tinder.app
+    
+    - name: Remove app extensions
+      run: |
+        # Sideloadly rejects mismatched bundle IDs for embedded extensions
+        rm -rf extracted/Payload/Tinder.app/PlugIns/WidgetsExtension.appex
+        rm -rf extracted/Payload/Tinder.app/PlugIns/NotificationServiceExtension.appex
+        rm -rf extracted/Payload/Tinder.app/PlugIns/NotificationContentExtension.appex
+        rm -rf extracted/Payload/Tinder.app/PlugIns/*
+        rm -rf extracted/Payload/Tinder.app/*.appex
+        ls -la extracted/Payload/Tinder.app
+    
     - name: Inject dylib
       run: |
-        DYLIB_PATH=$(find .theos/obj -name "*.dylib" | head -1)
-        if [ -z "$DYLIB_PATH" ]; then
-          echo "ERROR: dylib not found"
-          exit 1
-        fi
+        DYLIB_PATH=$(find .theos -name "OneWhamScale.dylib" | head -1)
+        mkdir -p extracted/Payload/Tinder.app/Frameworks
         cp "$DYLIB_PATH" extracted/Payload/Tinder.app/Frameworks/
-        insert_dylib --inplace --all-yes "@executable_path/Frameworks/$(basename $DYLIB_PATH)" extracted/Payload/Tinder.app/Tinder
-        
-    - name: Remove code signature
+        chmod +x extracted/Payload/Tinder.app/Frameworks/OneWhamScale.dylib
+        insert_dylib --inplace --all-yes "@executable_path/Frameworks/OneWhamScale.dylib" extracted/Payload/Tinder.app/Tinder
+    
+    - name: Remove old code signature
       run: |
         rm -rf extracted/Payload/Tinder.app/_CodeSignature
-        
+    
     - name: Fake sign with ldid
       run: |
         ldid -S extracted/Payload/Tinder.app/Tinder
-        
+        ldid -S extracted/Payload/Tinder.app/Frameworks/OneWhamScale.dylib
+    
     - name: Repackage IPA
       run: |
         cd extracted
-        zip -qr ../OneWhamScale_TinderPlus_v1.1.0.ipa Payload
+        zip -qr ../OneWhamScale_TinderPlus_v3.0.0.ipa Payload
         cd ..
-        ls -la OneWhamScale_TinderPlus_v1.1.0.ipa
-        
+        ls -la OneWhamScale_TinderPlus_v3.0.0.ipa
+    
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: OneWhamScale_TinderPlus_v1.1.0.ipa
-        tag_name: v1.1.0-${{ github.run_number }}
-        name: OneWhamScale v1.1.0 Build ${{ github.run_number }}
+        files: OneWhamScale_TinderPlus_v3.0.0.ipa
+        tag_name: v3.0.0-${{ github.run_number }}
+        name: OneWhamScale v3.0.0 Anti-Detect Build ${{ github.run_number }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

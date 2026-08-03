@@ -1,9 +1,9 @@
 Package: com.onewhamscale.tweak
-Name: OneWhamScale
-Version: 1.1.0
+Name: OneWhamScale Anti-Detect
+Version: 3.0.0
 Architecture: iphoneos-arm
-Description: Complete Tinder enhancement suite with floating menu, location spoofing, ghost mode, fake camera, and container isolation
-Maintainer: OneWhamScale Team
-Author: OneWhamScale Team
+Description: Jailbreak detection bypass + Tinder enhancement suite for dating apps
+Maintainer: OneWhamScale
+Author: OneWhamScale
 Section: Tweaks
-Depends: mobilesubstrate (>= 0.9.5000)
+Depends: mobilesubstrate (>= 0.9.5000), firmware (>= 13.0)
