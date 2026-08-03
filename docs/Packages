@@ -1,0 +1,15 @@
+Package: com.onewhamscale.tweak
+Name: OneWhamScale Anti-Detect
+Version: 4.0.0
+Architecture: iphoneos-arm
+Description: Jailbreak detection bypass + Tinder enhancement suite for dating apps
+Maintainer: OneWhamScale
+Author: OneWhamScale
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000), firmware (>= 13.0)
+Filename: debs/OneWhamScale_AntiDetect_v4.0.0.deb
+Size: 34722
+MD5sum: 4c9e93597e270c27555f1897a60b2fdd
+SHA1: e020fbe2b12b13dec2e1b0f284540a6906380627
+SHA256: 2cff4a3e69b3eb4d6558f2a9a19713959e76e6ad13d2ee6d906575de5ddefff8
+
