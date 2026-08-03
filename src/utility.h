@@ -8,10 +8,18 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 bool isKnownBadPath(const char *path);
 bool isKnownSpawnPath(const char *path);
 bool isKnownDylib(const char *path);
 bool isKnownJailbreakApp(const char *path);
 bool isRestrictedSystemPath(const char *path);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

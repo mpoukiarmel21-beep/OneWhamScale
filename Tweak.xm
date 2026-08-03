@@ -8,13 +8,7 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-
-/* C module init functions */
-void filebypass_init(void);
-void spawnbypass_init(void);
-void dylibbypass_init(void);
-void sysctlbypass_init(void);
-void mgspoof_init(void);
+#import "bypass.h"
 
 %ctor {
     @autoreleasepool {
