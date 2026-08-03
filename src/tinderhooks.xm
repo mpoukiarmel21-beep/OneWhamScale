@@ -1,15 +1,12 @@
 /* ============================================================
- * tinderhooks.m - Tinder-specific feature hooks via swizzling
- * No CydiaSubstrate dependency - uses ObjC runtime method swizzling
- * Features: Location spoof, Ghost mode, Fake camera, Containers,
- * Floating button + settings panel
+ * tinderhooks.xm - Tinder-specific feature hooks (Logos)
+ * Features: Location spoof, Ghost mode, Fake camera, Containers
  * ============================================================ */
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <CoreLocation/CoreLocation.h>
 #import <AVFoundation/AVFoundation.h>
-#import "swizzle.h"
 
 /* ============================================================
    CONFIGURATION & STATE
@@ -264,64 +261,46 @@
    LOCATION SPOOFING
    ============================================================ */
 
-static void (*orig_startUpdatingLocation)(id, SEL);
-static void hook_startUpdatingLocation(id self, SEL _cmd) {
+%hook CLLocationManager
+
+- (void)startUpdatingLocation {
     if ([OWSConfig sharedConfig].locationSpoofEnabled) {
         CLLocation *fakeLocation = [[CLLocation alloc] initWithLatitude:[OWSConfig sharedConfig].spoofedLatitude
                                                               longitude:[OWSConfig sharedConfig].spoofedLongitude];
-        id<CLLocationManagerDelegate> delegate = [self delegate];
-        if ([delegate respondsToSelector:@selector(locationManager:didUpdateLocations:)]) {
-            [delegate locationManager:self didUpdateLocations:@[fakeLocation]];
+        if ([self.delegate respondsToSelector:@selector(locationManager:didUpdateLocations:)]) {
+            [self.delegate locationManager:self didUpdateLocations:@[fakeLocation]];
         }
         return;
     }
-    orig_startUpdatingLocation(self, _cmd);
+    %orig;
 }
 
-static CLLocation *(*orig_location_get)(id, SEL);
-static CLLocation *hook_location_get(id self, SEL _cmd) {
+- (CLLocation *)location {
     if ([OWSConfig sharedConfig].locationSpoofEnabled) {
         return [[CLLocation alloc] initWithLatitude:[OWSConfig sharedConfig].spoofedLatitude
                                           longitude:[OWSConfig sharedConfig].spoofedLongitude];
     }
-    return orig_location_get(self, _cmd);
+    return %orig;
 }
 
-static void swizzleLocationManager(void) {
-    Class cls = [CLLocationManager class];
-    Method m = class_getInstanceMethod(cls, @selector(startUpdatingLocation));
-    orig_startUpdatingLocation = (void *)method_getImplementation(m);
-    method_setImplementation(m, (IMP)hook_startUpdatingLocation);
-
-    m = class_getInstanceMethod(cls, @selector(location));
-    orig_location_get = (void *)method_getImplementation(m);
-    method_setImplementation(m, (IMP)hook_location_get);
-}
+%end
 
 /* ============================================================
-   TINDER API - GHOST MODE
+   GHOST MODE
    ============================================================ */
 
-static void (*orig_updateUserPresence)(id, SEL, BOOL);
-static void hook_updateUserPresence(id self, SEL _cmd, BOOL online) {
-    if ([OWSConfig sharedConfig].ghostModeEnabled) orig_updateUserPresence(self, _cmd, NO);
-    else orig_updateUserPresence(self, _cmd, online);
+%hook TinderAPI
+
+- (void)updateUserPresence:(BOOL)online {
+    if ([OWSConfig sharedConfig].ghostModeEnabled) %orig(NO);
+    else %orig;
 }
 
-static void (*orig_sendTypingIndicator)(id, SEL);
-static void hook_sendTypingIndicator(id self, SEL _cmd) {
-    if (![OWSConfig sharedConfig].ghostModeEnabled) orig_sendTypingIndicator(self, _cmd);
+- (void)sendTypingIndicator {
+    if (![OWSConfig sharedConfig].ghostModeEnabled) %orig;
 }
 
-static void swizzleTinderAPI(void) {
-    Class cls = NSClassFromString(@"TinderAPI");
-    if (!cls) return;
-    Method m;
-    m = class_getInstanceMethod(cls, @selector(updateUserPresence:));
-    if (m) { orig_updateUserPresence = (void *)method_getImplementation(m); method_setImplementation(m, (IMP)hook_updateUserPresence); }
-    m = class_getInstanceMethod(cls, @selector(sendTypingIndicator));
-    if (m) { orig_sendTypingIndicator = (void *)method_getImplementation(m); method_setImplementation(m, (IMP)hook_sendTypingIndicator); }
-}
+%end
 
 /* ============================================================
    FAKE CAMERA
@@ -354,65 +333,62 @@ static void OWSInjectFakeVideo(void) {
     }
 }
 
-static id (*orig_defaultDeviceWithMediaType)(id, SEL, AVMediaType);
-static id hook_defaultDeviceWithMediaType(id self, SEL _cmd, AVMediaType mediaType) {
+%hook AVCaptureDevice
+
++ (AVCaptureDevice *)defaultDeviceWithMediaType:(AVMediaType)mediaType {
     if ([OWSConfig sharedConfig].fakeCameraEnabled && [mediaType isEqualToString:AVMediaTypeVideo]) return nil;
-    return orig_defaultDeviceWithMediaType(self, _cmd, mediaType);
+    return %orig;
 }
 
-static BOOL (*orig_canAddInput)(id, SEL, AVCaptureInput *);
-static BOOL hook_canAddInput(id self, SEL _cmd, AVCaptureInput *input) {
+%end
+
+%hook AVCaptureSession
+
+- (BOOL)canAddInput:(AVCaptureInput *)input {
     if ([OWSConfig sharedConfig].fakeCameraEnabled && [input isKindOfClass:[AVCaptureDeviceInput class]]) {
         AVCaptureDeviceInput *deviceInput = (AVCaptureDeviceInput *)input;
         if ([deviceInput.device hasMediaType:AVMediaTypeVideo]) return NO;
     }
-    return orig_canAddInput(self, _cmd, input);
+    return %orig;
 }
 
-static void (*orig_startRunning)(id, SEL);
-static void hook_startRunning(id self, SEL _cmd) {
+- (void)startRunning {
     if ([OWSConfig sharedConfig].fakeCameraEnabled) { OWSInjectFakeVideo(); return; }
-    orig_startRunning(self, _cmd);
+    %orig;
 }
 
-static void swizzleCamera(void) {
-    Class deviceCls = [AVCaptureDevice class];
-    Method m = class_getClassMethod(deviceCls, @selector(defaultDeviceWithMediaType:));
-    orig_defaultDeviceWithMediaType = (void *)method_getImplementation(m);
-    method_setImplementation(m, (IMP)hook_defaultDeviceWithMediaType);
-
-    Class sessionCls = [AVCaptureSession class];
-    m = class_getInstanceMethod(sessionCls, @selector(canAddInput:));
-    orig_canAddInput = (void *)method_getImplementation(m);
-    method_setImplementation(m, (IMP)hook_canAddInput);
-
-    m = class_getInstanceMethod(sessionCls, @selector(startRunning));
-    orig_startRunning = (void *)method_getImplementation(m);
-    method_setImplementation(m, (IMP)hook_startRunning);
-}
+%end
 
 /* ============================================================
    CONTAINER ISOLATION
    ============================================================ */
 
-static id (*orig_initWithSuiteName)(id, SEL, NSString *);
-static id hook_initWithSuiteName(id self, SEL _cmd, NSString *suiteName) {
+%hook NSUserDefaults
+
+- (instancetype)initWithSuiteName:(NSString *)suiteName {
     if ([OWSConfig sharedConfig].containerIsolationEnabled) {
         NSString *container = [OWSConfig sharedConfig].currentContainer;
         NSString *isolatedSuite = [NSString stringWithFormat:@"%@_%@", suiteName ?: @"default", container];
-        return orig_initWithSuiteName(self, _cmd, isolatedSuite);
+        return %orig(isolatedSuite);
     }
-    return orig_initWithSuiteName(self, _cmd, suiteName);
+    return %orig;
 }
 
-static NSURL *(*orig_URLForDirectory)(id, SEL, NSSearchPathDirectory, NSSearchPathDomainMask, NSURL *, BOOL, NSError **);
-static NSURL *hook_URLForDirectory(id self, SEL _cmd, NSSearchPathDirectory directory, NSSearchPathDomainMask domain, NSURL *url, BOOL create, NSError **error) {
+%end
+
+%hook NSFileManager
+
+- (NSURL *)URLForDirectory:(NSSearchPathDirectory)directory
+                  inDomain:(NSSearchPathDomainMask)domain
+         appropriateForURL:(NSURL *)url
+                    create:(BOOL)shouldCreate
+                     error:(NSError **)error {
     if ([OWSConfig sharedConfig].containerIsolationEnabled) {
         NSString *container = [OWSConfig sharedConfig].currentContainer;
-        NSURL *baseURL = orig_URLForDirectory(self, _cmd, directory, domain, url, create, error);
+        NSURL *baseURL = %orig;
         if (baseURL) {
             NSURL *isolatedURL = [baseURL URLByAppendingPathComponent:container];
-            if (create) {
+            if (shouldCreate) {
                 [[NSFileManager defaultManager] createDirectoryAtURL:isolatedURL
                                          withIntermediateDirectories:YES
                                                           attributes:nil
@@ -421,45 +397,34 @@ static NSURL *hook_URLForDirectory(id self, SEL _cmd, NSSearchPathDirectory dire
             return isolatedURL;
         }
     }
-    return orig_URLForDirectory(self, _cmd, directory, domain, url, create, error);
+    return %orig;
 }
 
-static void swizzleContainers(void) {
-    Class cls = [NSUserDefaults class];
-    Method m = class_getInstanceMethod(cls, @selector(initWithSuiteName:));
-    orig_initWithSuiteName = (void *)method_getImplementation(m);
-    method_setImplementation(m, (IMP)hook_initWithSuiteName);
-
-    cls = [NSFileManager class];
-    m = class_getInstanceMethod(cls, @selector(URLForDirectory:inDomain:appropriateForURL:create:error:));
-    orig_URLForDirectory = (void *)method_getImplementation(m);
-    method_setImplementation(m, (IMP)hook_URLForDirectory);
-}
+%end
 
 /* ============================================================
-   INIT
+   UI INITIALIZATION
    ============================================================ */
 
-void tinderhooks_init(void) {
-    [OWSConfig sharedConfig];
-    swizzleLocationManager();
-    swizzleTinderAPI();
-    swizzleCamera();
-    swizzleContainers();
+%ctor {
+    @autoreleasepool {
+        [OWSConfig sharedConfig];
 
-    /* Floating button */
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
-        if (window) {
-            OWSFloatingButton *button = [[OWSFloatingButton alloc] initWithFrame:CGRectMake(20, 100, 50, 50)];
-            [window addSubview:button];
-        }
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            UIWindow *window = [UIApplication sharedApplication].windows.firstObject;
+            if (window) {
+                OWSFloatingButton *button = [[OWSFloatingButton alloc] initWithFrame:CGRectMake(20, 100, 50, 50)];
+                [window addSubview:button];
+            }
 
-        [[NSNotificationCenter defaultCenter] addObserverForName:@"OWSSettingsButtonTapped"
-                                                          object:nil
-                                                           queue:[NSOperationQueue mainQueue]
-                                                      usingBlock:^(NSNotification *note) {
-            [OWSSettingsPanel showPanel];
-        }];
-    });
+            [[NSNotificationCenter defaultCenter] addObserverForName:@"OWSSettingsButtonTapped"
+                                                              object:nil
+                                                               queue:[NSOperationQueue mainQueue]
+                                                          usingBlock:^(NSNotification *note) {
+                [OWSSettingsPanel showPanel];
+            }];
+        });
+    }
 }
+
+void tinderhooks_init(void) {}

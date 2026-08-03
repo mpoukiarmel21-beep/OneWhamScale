@@ -1,6 +1,6 @@
 /* ============================================================
- * mediabypass.m - Media metadata bypass (placeholder)
- * Full implementation requires AVMetadataItem key introspection.
+ * mediabypass.xm - Media metadata bypass (placeholder Logos)
+ * Full AVAsset metadata stripping can be added here later.
  * ============================================================ */
 
 #import <Foundation/Foundation.h>

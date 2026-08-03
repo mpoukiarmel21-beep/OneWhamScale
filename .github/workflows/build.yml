@@ -1,4 +1,4 @@
-name: Build OneWhamScale Anti-Detect
+name: Build OneWhamScale Anti-Detect DEB
 
 on:
   workflow_dispatch:
@@ -17,93 +17,38 @@ jobs:
       with:
         lfs: true
     
-    - name: Install dependencies
-      run: |
-        brew install ldid
-    
-    - name: Build insert_dylib
-      run: |
-        git clone https://github.com/tyilo/insert_dylib.git
-        cd insert_dylib
-        xcodebuild -project insert_dylib.xcodeproj -configuration Release
-        sudo cp build/Release/insert_dylib /usr/local/bin/
-        cd ..
-    
     - name: Setup Theos
       run: |
         git clone --recursive https://github.com/theos/theos.git $HOME/theos
         echo "THEOS=$HOME/theos" >> $GITHUB_ENV
     
-    - name: Setup input IPA
-      run: |
-        if [ -f input/Tinder.ipa ]; then
-          cp input/Tinder.ipa Tinder.ipa
-          echo "✓ Using input/Tinder.ipa"
-        else
-          echo "ERROR: input/Tinder.ipa not found"
-          exit 1
-        fi
-        ls -la Tinder.ipa
-    
-    - name: Compile OneWhamScale library
+    - name: Compile tweak package
       run: |
         make clean
-        make
-        DYLIB_PATH=$(find .theos -name "OneWhamScale.dylib" | head -1)
-        if [ -z "$DYLIB_PATH" ]; then
-          echo "ERROR: OneWhamScale.dylib not found"
+        make package
+    
+    - name: Locate DEB package
+      run: |
+        DEB_PATH=$(find .theos -name "*.deb" | head -1)
+        if [ -z "$DEB_PATH" ]; then
+          echo "ERROR: .deb package not found"
           exit 1
         fi
-        echo "DYLIB_PATH=$DYLIB_PATH"
-        ls -la "$DYLIB_PATH"
-        otool -L "$DYLIB_PATH"
+        echo "DEB_PATH=$DEB_PATH"
+        ls -la "$DEB_PATH"
+        dpkg-deb -I "$DEB_PATH"
+        echo "deb_path=$DEB_PATH" >> $GITHUB_ENV
     
-    - name: Extract IPA
+    - name: Copy DEB to workspace
       run: |
-        mkdir -p extracted
-        unzip -q Tinder.ipa -d extracted
-        ls -la extracted/Payload/Tinder.app
-    
-    - name: Remove app extensions
-      run: |
-        # Sideloadly rejects mismatched bundle IDs for embedded extensions
-        rm -rf extracted/Payload/Tinder.app/PlugIns/WidgetsExtension.appex
-        rm -rf extracted/Payload/Tinder.app/PlugIns/NotificationServiceExtension.appex
-        rm -rf extracted/Payload/Tinder.app/PlugIns/NotificationContentExtension.appex
-        rm -rf extracted/Payload/Tinder.app/PlugIns/*
-        rm -rf extracted/Payload/Tinder.app/*.appex
-        ls -la extracted/Payload/Tinder.app
-    
-    - name: Inject dylib
-      run: |
-        DYLIB_PATH=$(find .theos -name "OneWhamScale.dylib" | head -1)
-        mkdir -p extracted/Payload/Tinder.app/Frameworks
-        cp "$DYLIB_PATH" extracted/Payload/Tinder.app/Frameworks/
-        chmod +x extracted/Payload/Tinder.app/Frameworks/OneWhamScale.dylib
-        install_name_tool -id "@executable_path/Frameworks/OneWhamScale.dylib" extracted/Payload/Tinder.app/Frameworks/OneWhamScale.dylib
-        insert_dylib --inplace --all-yes "@executable_path/Frameworks/OneWhamScale.dylib" extracted/Payload/Tinder.app/Tinder
-    
-    - name: Remove old code signature
-      run: |
-        rm -rf extracted/Payload/Tinder.app/_CodeSignature
-    
-    - name: Fake sign with ldid
-      run: |
-        ldid -S extracted/Payload/Tinder.app/Tinder
-        ldid -S extracted/Payload/Tinder.app/Frameworks/OneWhamScale.dylib
-    
-    - name: Repackage IPA
-      run: |
-        cd extracted
-        zip -qr ../OneWhamScale_TinderPlus_v3.0.0.ipa Payload
-        cd ..
-        ls -la OneWhamScale_TinderPlus_v3.0.0.ipa
+        cp "$deb_path" OneWhamScale_AntiDetect_v4.0.0.deb
+        ls -la OneWhamScale_AntiDetect_v4.0.0.deb
     
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: OneWhamScale_TinderPlus_v3.0.0.ipa
-        tag_name: v3.0.0-${{ github.run_number }}
-        name: OneWhamScale v3.0.0 Anti-Detect Build ${{ github.run_number }}
+        files: OneWhamScale_AntiDetect_v4.0.0.deb
+        tag_name: v4.0.0-${{ github.run_number }}
+        name: OneWhamScale v4.0.0 DEB Build ${{ github.run_number }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
