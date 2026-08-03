@@ -40,7 +40,6 @@ jobs:
         fi
         echo "DEB_PATH=$DEB_PATH"
         ls -la "$DEB_PATH"
-        dpkg-deb -I "$DEB_PATH"
         echo "deb_path=$DEB_PATH" >> $GITHUB_ENV
     
     - name: Copy DEB to workspace
